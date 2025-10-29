@@ -24,8 +24,8 @@ import (
 	"strings"
 
 	"github.com/containerd/console"
-	gocni "github.com/containerd/go-cni"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 
 	containerd "github.com/containerd/containerd/v2/client"
@@ -174,6 +174,20 @@ var Command = &cli.Command{
 		}
 		defer cancel()
 
+		var network *tasks.Network
+		if enableCNI {
+			if network, err = tasks.SetupNetwork(ctx, id, cliContext); err != nil {
+				logrus.WithError(err).Error("setupNetwork failed")
+				return err
+			}
+
+			if !detach {
+				defer func() {
+					network.Teardown(ctx)
+				}()
+			}
+		}
+
 		container, err := NewContainer(ctx, client, cliContext)
 		if err != nil {
 			return err
@@ -193,12 +207,6 @@ var Command = &cli.Command{
 				return err
 			}
 		}
-		var network gocni.CNI
-		if enableCNI {
-			if network, err = gocni.New(gocni.WithDefaultConf); err != nil {
-				return err
-			}
-		}
 
 		opts := tasks.GetNewTaskOpts(cliContext)
 		ioOpts := []cio.Opt{cio.WithFIFODir(cliContext.String("fifo-dir"))}
@@ -210,12 +218,6 @@ var Command = &cli.Command{
 		var statusC <-chan containerd.ExitStatus
 		if !detach {
 			defer func() {
-				if enableCNI {
-					if err := network.Remove(ctx, commands.FullID(ctx, container), ""); err != nil {
-						log.L.WithError(err).Error("failed to remove network")
-					}
-				}
-
 				if _, err := task.Delete(ctx, containerd.WithProcessKill); err != nil && !errdefs.IsNotFound(err) {
 					log.L.WithError(err).Error("failed to cleanup task")
 				}
@@ -227,16 +229,6 @@ var Command = &cli.Command{
 		}
 		if cliContext.IsSet("pid-file") {
 			if err := commands.WritePidFile(cliContext.String("pid-file"), int(task.Pid())); err != nil {
-				return err
-			}
-		}
-		if enableCNI {
-			netNsPath, err := getNetNSPath(ctx, task)
-			if err != nil {
-				return err
-			}
-
-			if _, err := network.Setup(ctx, commands.FullID(ctx, container), netNsPath); err != nil {
 				return err
 			}
 		}

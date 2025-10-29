@@ -228,6 +228,10 @@ var (
 			Aliases: []string{"u"},
 			Usage:   "Username or user id, group optional (format: <name|uid>[:<group|gid>])",
 		},
+		&cli.BoolFlag{
+			Name:  "cni",
+			Usage: "enable cni networking for the container",
+		},
 	}
 )
 

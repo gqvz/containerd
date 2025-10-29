@@ -488,10 +488,6 @@ func validNamespace(ns string) bool {
 	}
 }
 
-func getNetNSPath(_ context.Context, task containerd.Task) (string, error) {
-	return fmt.Sprintf("/proc/%d/ns/net", task.Pid()), nil
-}
-
 // withStaticCDIRegistry inits the CDI registry and disables auto-refresh.
 // This is used from the `run` command to avoid creating a registry with auto-refresh enabled.
 // It also provides a way to override the CDI spec file paths if required.
